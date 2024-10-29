@@ -1,7 +1,9 @@
 require_relative './config'
 
-def do_smth
-  byebug
+def run_bot!(token = TOKEN)
+  Telegram::Bot::Client.run(token) do |bot|
+    bot.listen { |m| Sender.new(bot, ProcessMessage.new(m).process) }
+  end
 end
 
-do_smth
+run_bot!

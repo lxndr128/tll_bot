@@ -1,0 +1,7 @@
+.byebug_history
+
+db/data.db
+db/data.db-shm
+db/data.db-wal
+
+token

@@ -1,0 +1,11 @@
+token:
+
+admin_group_id: 
+
+time_to_send:
+  - "07:00"
+  - "14:00"
+  - "20:00"
+
+moderators_ids:
+  - ""

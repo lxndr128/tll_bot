@@ -1,0 +1,20 @@
+module Texts
+  def on_whose_behalf_text = TEXTS[:on_whose_behalf_text]
+  def announce_or_request_text = TEXTS[:announce_or_request_text]
+  def announce_text = TEXTS[:about_announce_text]
+  def request_have_sent_text = TEXTS[:request_have_sent_text]
+  def request_text = TEXTS[:write_your_request_text]
+  def about_commercial_text = TEXTS[:about_commercial_text]
+  def ask_for_photo_text = TEXTS[:ask_for_photo_text]
+  def announce_have_sent_text = TEXTS[:announce_have_sent_text]
+  def proceed_text = TEXTS[:proceed_text]
+
+  def button_announce = TEXTS[:buttons][:announce_event]
+  def button_question = TEXTS[:buttons][:other_question]
+  def button_send = TEXTS[:buttons][:send]
+  def button_rewrite = TEXTS[:buttons][:rewrite]
+  def button_reset_all = TEXTS[:buttons][:reset_all]
+  def button_tll_event = TEXTS[:buttons][:tll_event]
+  def button_other_event = TEXTS[:buttons][:other_event]
+  def button_have_no_photos = TEXTS[:buttons][:have_no_photos]
+end

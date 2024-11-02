@@ -1,8 +1,11 @@
 require_relative './config'
+require 'clap'
 require 'fallen'
+require "fallen/cli"
 
 module Bot
   extend Fallen
+  extend Fallen::CLI
   
   def self.run
     Thread.new { run_sender! }
@@ -23,8 +26,16 @@ module Bot
   end
 end
 
-Bot.daemonize!
-Bot.start!
+case Clap.run(ARGV, Bot.cli).first
+when "start"
+  Bot.pid_file "./bot.pid"
+  Bot.daemonize!
+  Bot.start!
+when "stop"
+  Bot.stop!
+else
+  Bot.usage
+end
 
 
   

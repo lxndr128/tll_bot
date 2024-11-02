@@ -4,12 +4,14 @@ class ProcessMessage
   def initialize(message)
     if message.class == Telegram::Bot::Types::CallbackQuery
       @message = message.data
-      @user = User.find_or_create_by(tg_id: message.message.chat.id)
+      tg_id = message.message.chat.id
     else
       @message = message.text || 'null'
       @photos = message.photo
-      @user = User.find_or_create_by(tg_id: message.chat.id)
+      tg_id = message.chat.id
     end
+
+    @user = User.find_or_create_by(tg_id: tg_id)
   end
 
   def process

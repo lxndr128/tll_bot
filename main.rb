@@ -13,7 +13,7 @@ module Bot
   end
 
   def self.run_bot!(token = TOKEN)
-    Telegram::Bot::Client.run(token) do |bot|
+    Telegram::Bot::Client.run(token.strip) do |bot|
       bot.listen { |m| Sender.new(bot, ProcessMessage.new(m).process) }
     rescue => e
       puts e
@@ -22,7 +22,7 @@ module Bot
     end
   end
 
-  def run_sender!
+  def self.run_sender!
   end
 end
 

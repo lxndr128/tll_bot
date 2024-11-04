@@ -8,13 +8,13 @@ module Bot
   extend Fallen::CLI
   
   def self.run
-    Thread.new { run_sender! }
     run_bot!
   end
 
   def self.run_bot!(token = TOKEN)
     Telegram::Bot::Client.run(token.strip) do |bot|
-      bot.listen { |m| Sender.new(bot, ProcessMessage.new(m).process) }
+      Thread.new { run_sender! }
+      bot.listen { |m| Sender.new(bot, ProcessMessage.new(m, bot).process) }
     rescue => e
       puts e
       puts e.backtrace
@@ -22,7 +22,19 @@ module Bot
     end
   end
 
-  def self.run_sender!
+  def self.run_sender!(token = TOKEN)
+    bot = Telegram::Bot::Client.new(token.strip)
+
+    while
+      current_time = Time.now.to_s.split[1].split(":")[..1]
+      schedule_time = SETTINGS[:time_to_send].map { |t| t.split(':') }
+
+      if schedule_time.include?(current_time)
+        AdminMessages.send_all_requests(bot)
+      end
+
+      sleep 58
+    end
   end
 end
 

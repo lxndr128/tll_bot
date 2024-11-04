@@ -1,6 +1,4 @@
-token:
-
-admin_group_id: 
+admin_group_id: -1002381806001
 
 time_to_send:
   - "07:00"
@@ -8,4 +6,7 @@ time_to_send:
   - "20:00"
 
 moderators_ids:
-  - ""
+  - 245888700
+  - 448098885
+  - 1011063055
+  - 6227165142

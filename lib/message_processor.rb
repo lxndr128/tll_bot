@@ -1,29 +1,54 @@
 class ProcessMessage
   include Texts
 
-  def initialize(message)
+  # Написать нормально, если будут силы
+  def initialize(message, bot=nil)
+    @bot = bot
+    @m = message
     if message.class == Telegram::Bot::Types::CallbackQuery
-      @message = message.data
-      tg_id = message.message.chat.id
+      if message.respond_to?(:from)
+        @message = message.data
+        tg_id = message.from.id
+        username = message.from.username || "Noname"
+      else
+        @message = message.data
+        tg_id = message.message.chat.id
+        username = message.message.chat.username || "Noname"
+      end
     else
       @message = message.text || 'null'
       @photos = message.photo
       tg_id = message.chat.id
+      username = message.chat.username || "Noname"
     end
 
-    @user = User.find_or_create_by(tg_id: tg_id)
+    @user = User.find_or_create_by(tg_id: tg_id, username: username)
   end
 
   def process
-    return if @message == $previous_message[@user.tg_id]
+    return unless border
+    return AdminMessages.new(@message, @user, @bot).process if SETTINGS[:moderators_ids].include?(@user.tg_id) && @user.admin
+    
+    reset_all if @message == button_reset_all
+
+    self.send(@user.aasm_state + '_response')
+  end
+
+  def border
+    return if @m.try(:from).class.name != "Telegram::Bot::Types::User"
+    return if @message == $previous_message[@user.tg_id] && @photos.blank?
+
+    if @message == "сменить режим" && SETTINGS[:moderators_ids].include?(@user.tg_id)
+      @user.update(admin: !@user.admin)
+      @user.questions.where(ready: false).destroy_all
+      @user.applications.where(ready: false).destroy_all
+    end
 
     $previous_message[@user.tg_id] = @message
 
     return if !@photos.blank? && @user.aasm_state != "photos"
 
-    reset_all if @message == button_reset_all
-
-    self.send(@user.aasm_state + '_response')
+    true
   end
 
   def init_response
@@ -42,7 +67,7 @@ class ProcessMessage
   end
 
   def other_question_response
-    question = Question.find_or_create_by(ready: false, user_id: @user.id)
+    question = Question.find_or_create_by(ready: false, user_id: @user.id, message_id: @m.message_id)
     question.update(text: @message, ready: true)
     @user.back_to_start!
 
@@ -51,7 +76,7 @@ class ProcessMessage
 
   def announce_description_response
     @user.behalf!
-    application = Application.find_or_create_by(ready: false, user_id: @user.id)
+    application = Application.find_or_create_by(ready: false, user_id: @user.id, message_id: @m.message_id)
     application.update(text: @message)
 
     { text: on_whose_behalf_text, chat_id: @user.tg_id, buttons: [button_tll_event, button_other_event], disable_reset_button: true }

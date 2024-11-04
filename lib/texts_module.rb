@@ -17,4 +17,6 @@ module Texts
   def button_tll_event = TEXTS[:buttons][:tll_event]
   def button_other_event = TEXTS[:buttons][:other_event]
   def button_have_no_photos = TEXTS[:buttons][:have_no_photos]
+  def button_resolve_request = TEXTS[:buttons][:button_resolve_request]
+  def button_send_full_request = TEXTS[:buttons][:button_send_full_request]
 end

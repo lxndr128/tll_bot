@@ -46,6 +46,8 @@ unprocessed_requests_text: "Есть необработанные заявки! 
 proceed_text: "Далее"
 
 buttons:
+  button_resolve_request: "Обработано"
+  button_send_full_request: "Развернуть"
   announce_event: "Анонсировать мероприятие"
   other_question: "Другой вопрос"
   tll_event: "Мероприятие ТЛЛ"

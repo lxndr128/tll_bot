@@ -40,8 +40,8 @@ end
 
 case Clap.run(ARGV, Bot.cli).first
 when "start"
-  # Bot.pid_file "./bot.pid"
-  # Bot.daemonize!
+  Bot.pid_file "./bot.pid"
+  Bot.daemonize!
   Bot.start!
 when "stop"
   Bot.stop!

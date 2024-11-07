@@ -13,11 +13,11 @@ module Bot
 
   def self.run_bot!(token = TOKEN)
     Telegram::Bot::Client.run(token.strip) do |bot|
-      Thread.new { run_sender! }
+      t = Thread.new { run_sender! }
       bot.listen { |m| Sender.new(bot, ProcessMessage.new(m, bot).process) }
     rescue => e
-      puts e
-      puts e.backtrace
+      t.kill
+      puts [e, e.backtrace]
       redo
     end
   end
@@ -40,8 +40,8 @@ end
 
 case Clap.run(ARGV, Bot.cli).first
 when "start"
-  Bot.pid_file "./bot.pid"
-  Bot.daemonize!
+  # Bot.pid_file "./bot.pid"
+  # Bot.daemonize!
   Bot.start!
 when "stop"
   Bot.stop!

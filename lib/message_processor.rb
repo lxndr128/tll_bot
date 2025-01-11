@@ -93,7 +93,7 @@ class ProcessMessage
       @user.commercial!
       @user.applications.where(ready: false).last.update(as_tll: true)
 
-      { text: about_commercial_text, chat_id: @user.tg_id }
+      { text: about_commercial_text, chat_id: @user.tg_id, disable_reset_button: true }
     else
       { text: on_whose_behalf_text, chat_id: @user.tg_id, buttons: [button_tll_event, button_other_event], disable_reset_button: true }
     end

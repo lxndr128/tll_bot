@@ -13,11 +13,11 @@ class AdminMessages
     end
 
     def send_all_requests_ls(bot, chat_id)
-      Application.where(ready: true).where("created_at >= #{Date.today - 2.months}").each do |a|
+      Application.where(ready: true).where("created_at >= #{Date.today - 2.months}").order(created_at: :desc).each do |a|
         Sender.new(bot, AdminMessages.ls_notification(a, chat_id))
       end
 
-      Question.where(ready: true).where("created_at >= #{Date.today - 2.months}").each do |q|
+      Question.where(ready: true).where("created_at >= #{Date.today - 2.months}").order(created_at: :desc).each do |q|
         Sender.new(bot, AdminMessages.ls_notification(q, chat_id))
       end
     end
@@ -69,8 +69,12 @@ class AdminMessages
   end
 
   def resolve_response(klass, id)
-    klass.constantize.find(id).update(processed: true, processed_by: @user.id)
-    nil
+    resolvable = klass.constantize.find(id)
+    resolvable.update(processed: true, processed_by: @user.id)
+
+    text = "Заявка \"#{resolvable.text[..35]}...\" была обработана админом #{@user.username}"
+
+    { text: text, chat_id: SETTINGS[:admin_group_id], disable_reset_button: true }
   end
 
   def sendfull_response(klass, id)

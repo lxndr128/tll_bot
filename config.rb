@@ -15,8 +15,19 @@ require_relative './lib/message_processor'
 require_relative './lib/message_sender'
 require_relative './lib/admin_messages'
 
-TOKEN = File.read('token')
+unless File.exist?('token')
+	raise "Missing token file. Create a file named 'token' with the bot token"
+end
+TOKEN = File.read('token').strip
+
+unless File.exist?('settings.yaml')
+	raise "Missing settings.yaml"
+end
 SETTINGS = YAML.load(File.read('settings.yaml')).with_indifferent_access
+
+unless File.exist?('texts.yaml')
+	raise "Missing texts.yaml"
+end
 TEXTS = YAML.load(File.read('texts.yaml')).with_indifferent_access
 
 $previous_message = {}

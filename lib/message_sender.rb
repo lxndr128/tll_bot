@@ -13,16 +13,26 @@ class Sender
     @photos = result[:photos]
 
     send
-    send_bunch_of_photos if @photos
+    begin
+      send_bunch_of_photos if @photos
+    rescue => e
+      $logger.error("Error sending photos to #{@chat_id}: #{e.class} - #{e.message}") if defined?($logger)
+    end
   end
 
   def send
     return if @chat_id.nil?
+  return if @text.nil? || @text.empty?
 
     @buttons << button_reset_all unless @disable_reset_button
-    return send_text_and_buttons if @buttons.present? || @c_buttons.present?
-    
-    send_text
+    begin
+      return send_text_and_buttons if @buttons.present? || @c_buttons.present?
+      
+      send_text
+    rescue => e
+      $logger.error("Error sending message to #{@chat_id}: #{e.class} - #{e.message}")
+      $logger.error(e.backtrace.join("\n"))
+    end
   end
 
   def send_text
@@ -42,7 +52,13 @@ class Sender
   end
 
   def send_bunch_of_photos
-    media = @photos.map { |p| Telegram::Bot::Types::InputMediaPhoto.new({media: p.file_id}) }
-    @bot.api.send_media_group(chat_id: @chat_id, media: media)
+    return unless @photos.respond_to?(:map)
+    media = @photos.map { |p| Telegram::Bot::Types::InputMediaPhoto.new({media: p.file_id}) rescue nil }.compact
+    return if media.empty?
+    begin
+      @bot.api.send_media_group(chat_id: @chat_id, media: media)
+    rescue => e
+      $logger.error("Error in send_media_group to #{@chat_id}: #{e.class} - #{e.message}") if defined?($logger)
+    end
   end
 end

@@ -5,3 +5,6 @@ db/data.db-shm
 db/data.db-wal
 
 token
+
+logs/
+*.log

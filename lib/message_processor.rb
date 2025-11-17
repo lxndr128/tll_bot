@@ -22,7 +22,20 @@ class ProcessMessage
       username = message.chat.username || "Noname"
     end
 
-    @user = User.find_or_create_by(tg_id: tg_id, username: username)
+    # Use find first, then create if not exists to avoid race conditions
+    @user = User.find_by(tg_id: tg_id)
+    unless @user
+      begin
+        @user = User.create!(tg_id: tg_id, username: username)
+      rescue ActiveRecord::RecordNotUnique
+        @user = User.find_by(tg_id: tg_id)
+      end
+    end
+    unless @user
+      msg = "Failed to find or create user with tg_id=#{tg_id}"
+      $logger.error(msg) if defined?($logger)
+      raise msg
+    end
   end
 
   def process
@@ -31,12 +44,22 @@ class ProcessMessage
     
     reset_all if @message == button_reset_all
 
-    self.send(@user.aasm_state + '_response')
+    begin
+      self.send(@user.aasm_state + '_response')
+    rescue => e
+      $logger.error("Error processing message for user #{@user.tg_id}: #{e.class} - #{e.message}")
+      $logger.error(e.backtrace.join("\n"))
+      { text: "Произошла ошибка при обработке сообщения. Попробуй ещё раз.", chat_id: @user.tg_id }
+    end
   end
 
   def border
     return if @m.try(:from).class.name != "Telegram::Bot::Types::User"
-    return if @message == $previous_message[@user.tg_id] && @photos.blank?
+    
+    # Skip duplicate messages (unless they contain photos)
+    if @message == ($previous_message[@user.tg_id] || nil) && @photos.blank?
+      return false
+    end
 
     if @message == "сменить режим" && SETTINGS[:moderators_ids].include?(@user.tg_id)
       @user.update(admin: !@user.admin)
@@ -46,7 +69,8 @@ class ProcessMessage
 
     $previous_message[@user.tg_id] = @message
 
-    return if !@photos.blank? && @user.aasm_state != "photos"
+    # Allow photos in any state
+    return true if !@photos.blank?
 
     true
   end
@@ -66,32 +90,38 @@ class ProcessMessage
     end
   end
 
+  def announce_response
+    # User sends the announcement text
+    @user.behalf!
+    message_id = @m.try(:message_id) || Time.now.to_i
+    application = Application.find_or_create_by(ready: false, user_id: @user.id, message_id: message_id)
+    application.update(text: @message)
+
+    { text: on_whose_behalf_text, chat_id: @user.tg_id, buttons: [button_tll_event, button_other_event], disable_reset_button: true }
+  end
+
   def other_question_response
-    question = Question.find_or_create_by(ready: false, user_id: @user.id, message_id: @m.message_id)
+    message_id = @m.try(:message_id) || Time.now.to_i
+    question = Question.find_or_create_by(ready: false, user_id: @user.id, message_id: message_id)
     question.update(text: @message, ready: true)
     @user.back_to_start!
 
     { text: request_have_sent_text, chat_id: @user.tg_id, disable_reset_button: true }
   end
 
-  def announce_description_response
-    @user.behalf!
-    application = Application.find_or_create_by(ready: false, user_id: @user.id, message_id: @m.message_id)
-    application.update(text: @message)
-
-    { text: on_whose_behalf_text, chat_id: @user.tg_id, buttons: [button_tll_event, button_other_event], disable_reset_button: true }
-  end
 
   def on_whose_behalf_response
     case @message
     when button_tll_event
       @user.commercial!
-      @user.applications.where(ready: false).last.update(as_tll: true)
+      app = @user.applications.where(ready: false).last
+      app.update(as_tll: true) if app
 
       { text: about_commercial_text, chat_id: @user.tg_id, disable_reset_button: true  }
     when button_other_event
       @user.commercial!
-      @user.applications.where(ready: false).last.update(as_tll: false)
+      app = @user.applications.where(ready: false).last
+      app.update(as_tll: false) if app
 
       { text: about_commercial_text, chat_id: @user.tg_id, disable_reset_button: true }
     else
@@ -100,21 +130,42 @@ class ProcessMessage
   end
 
   def commercial_or_not_response
+    @user.ask_for_resources!
+    # Use the last unfinished application (preserves text from announce_description_response)
+    application = @user.applications.where(ready: false).last
+    application.update(commercial: @message) if application
+
+    { text: ask_for_resources_text, chat_id: @user.tg_id, disable_reset_button: true }
+  end
+
+  def resources_response
     @user.add_photos!
-    application = Application.find_or_create_by(ready: false, user_id: @user.id)
-    application.update(commercial: @message)
+    application = @user.applications.where(ready: false).last
+    application.update(resources: @message) if application
 
     { text: ask_for_photo_text, chat_id: @user.tg_id, buttons: [button_have_no_photos] }
   end
 
   def photos_response
-    process_photos
-    return if @message == 'null'
+    # Process incoming photos
+    if @photos
+      process_photos
+      
+      # Send confirmation but stay in photos state to allow more photos
+      return { text: photos_received_text, chat_id: @user.tg_id, buttons: [button_have_no_photos], disable_reset_button: true }
+    end
+    
+    # If user sends text message in photos state (without photos) - button press to finish
+    if @message == button_have_no_photos
+      app = @user.applications.where(ready: false).last
+      app.update(ready: true) if app
+      @user.back_to_start!
 
-    @user.applications.where(ready: false).last.update(ready: true)
-    @user.back_to_start!
-
-    { text: announce_have_sent_text, chat_id: @user.tg_id, disable_reset_button: true }
+      return { text: announce_have_sent_text, chat_id: @user.tg_id, disable_reset_button: true }
+    end
+    
+    # Any other text message - stay in photos state
+    nil
   end
 
   def confirmation_response
@@ -122,15 +173,17 @@ class ProcessMessage
   end
 
   def process_photos
-    return unless @photos
+    return unless @photos.present? && @photos.last
 
     application = @user.applications.where(ready: false).last
-    application.photos.create(file_id: @photos.last.file_id)
+    return unless application
+    
+    application.photos.create(file_id: @photos.last.file_id) if @photos.last.file_id
   end
 
   def reset_all
     @user.questions.where(ready: false).destroy_all
     @user.applications.where(ready: false).destroy_all
-    @user.back_to_start!
+    @user.back_to_start! if @user.persisted?
   end
 end

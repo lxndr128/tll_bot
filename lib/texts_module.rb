@@ -5,8 +5,10 @@ module Texts
   def request_have_sent_text = TEXTS[:request_have_sent_text]
   def request_text = TEXTS[:write_your_request_text]
   def about_commercial_text = TEXTS[:about_commercial_text]
+  def ask_for_resources_text = TEXTS[:ask_for_resources_text]
   def ask_for_photo_text = TEXTS[:ask_for_photo_text]
   def announce_have_sent_text = TEXTS[:announce_have_sent_text]
+  def photos_received_text = TEXTS[:photos_received_text]
   def proceed_text = TEXTS[:proceed_text]
 
   def button_announce = TEXTS[:buttons][:announce_event]

@@ -38,7 +38,21 @@ class ProcessMessage
     end
   end
 
-  def process
+  def process 
+    if @message == "сменить режим" && SETTINGS[:moderators_ids].include?(@user.tg_id)
+      @user.update(admin: !@user.admin)
+      @user.questions.where(ready: false).destroy_all
+      @user.applications.where(ready: false).destroy_all
+
+      if @user.admin
+        $logger.info("admin")
+        return { text: "✅ Режим модератора активирован.", chat_id: @user.tg_id }
+      else 
+        $logger.info("not admin")
+        return { text: "✅ Режим обычного пользователя активирован.", chat_id: @user.tg_id }
+      end
+    end
+
     return unless border
     return AdminMessages.new(@message, @user, @bot).process if SETTINGS[:moderators_ids].include?(@user.tg_id) && @user.admin
     
@@ -60,13 +74,7 @@ class ProcessMessage
     if @message == ($previous_message[@user.tg_id] || nil) && @photos.blank?
       return false
     end
-
-    if @message == "сменить режим" && SETTINGS[:moderators_ids].include?(@user.tg_id)
-      @user.update(admin: !@user.admin)
-      @user.questions.where(ready: false).destroy_all
-      @user.applications.where(ready: false).destroy_all
-    end
-
+    
     $previous_message[@user.tg_id] = @message
 
     # Allow photos in any state

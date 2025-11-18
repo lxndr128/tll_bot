@@ -7,7 +7,13 @@ no_docker_run:
 	ruby main.rb start
 
 no_docker_stop:
-	kill -9 $(cat ./bot.pid)
+	-pkill -f "ruby main.rb"
+	-pkill -9 -f "ruby main.rb" 
+	rm -f ./bot.pid
+	echo "Bot stopped"
+
+no_docker_restart: no_docker_stop no_docker_run
+	@echo "Bot restarted"
 
 build: 
 	docker build -t summer_bot .

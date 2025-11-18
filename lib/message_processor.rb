@@ -46,10 +46,10 @@ class ProcessMessage
 
       if @user.admin
         $logger.info("admin")
-        return { text: "✅ Режим модератора активирован. Используйте /sendall для просмотра заявок.", chat_id: @user.tg_id }
+        return { text: "✅ Режим модератора активирован. Используйте /sendall для просмотра заявок.", chat_id: @user.tg_id, disable_reset_button: true }
       else 
         $logger.info("not admin")
-        return { text: "✅ Режим обычного пользователя активирован.", chat_id: @user.tg_id }
+        return { text: "✅ Режим обычного пользователя активирован.", chat_id: @user.tg_id, disable_reset_button: true }
       end
     end
 
@@ -98,7 +98,7 @@ class ProcessMessage
       AdminMessages.send_all_requests_ls(@bot, @user.tg_id)
     end
     
-    { text: "🔄 Загружаю список всех заявок за 2 месяца...", chat_id: @user.tg_id }
+    { text: "🔄 Загружаю список всех заявок за 2 месяца...", chat_id: @user.tg_id, disable_reset_button: true }
   end
 
   def init_response

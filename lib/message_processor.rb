@@ -38,7 +38,7 @@ class ProcessMessage
     end
   end
 
-  def process 
+  def process
     if @message == "сменить режим" && SETTINGS[:moderators_ids].include?(@user.tg_id)
       @user.update(admin: !@user.admin)
       @user.questions.where(ready: false).destroy_all
@@ -46,15 +46,23 @@ class ProcessMessage
 
       if @user.admin
         $logger.info("admin")
-        return { text: "✅ Режим модератора активирован.", chat_id: @user.tg_id }
+        return { text: "✅ Режим модератора активирован. Используйте /sendall для просмотра заявок.", chat_id: @user.tg_id }
       else 
         $logger.info("not admin")
         return { text: "✅ Режим обычного пользователя активирован.", chat_id: @user.tg_id }
       end
     end
 
+    if SETTINGS[:moderators_ids].include?(@user.tg_id) && @user.admin
+      case @message
+      when "/sendall"
+        return sendall_response
+      end
+      
+      return AdminMessages.new(@message, @user, @bot).process
+    end
+
     return unless border
-    return AdminMessages.new(@message, @user, @bot).process if SETTINGS[:moderators_ids].include?(@user.tg_id) && @user.admin
     
     reset_all if @message == button_reset_all
 
@@ -74,13 +82,23 @@ class ProcessMessage
     if @message == ($previous_message[@user.tg_id] || nil) && @photos.blank?
       return false
     end
-    
+
     $previous_message[@user.tg_id] = @message
 
     # Allow photos in any state
     return true if !@photos.blank?
 
     true
+  end
+
+  def sendall_response
+    # Отправляем список заявок
+    Thread.new do
+      sleep 0.5
+      AdminMessages.send_all_requests_ls(@bot, @user.tg_id)
+    end
+    
+    { text: "🔄 Загружаю список всех заявок за 2 месяца...", chat_id: @user.tg_id }
   end
 
   def init_response

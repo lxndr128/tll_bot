@@ -46,7 +46,7 @@ class ProcessMessage
 
       if @user.admin
         $logger.info("admin")
-        return { text: "✅ Режим модератора активирован. Используйте /sendall для просмотра заявок.", chat_id: @user.tg_id, disable_reset_button: true }
+        return { text: "✅ Режим модератора активирован.", chat_id: @user.tg_id, disable_reset_button: true }
       else 
         $logger.info("not admin")
         return { text: "✅ Режим обычного пользователя активирован.", chat_id: @user.tg_id, disable_reset_button: true }
@@ -54,9 +54,21 @@ class ProcessMessage
     end
 
     if SETTINGS[:moderators_ids].include?(@user.tg_id) && @user.admin
+      if @message.start_with?("paginate_")
+        return paginate_response
+      end
+
       case @message
-      when "/sendall"
-        return sendall_response
+      when "/applications", "/заявки"
+        return applications_response
+      when "/questions", "/вопросы"  
+        return questions_response
+      when "/unprocessed_applications", "/необработанные_заявки"
+        return unprocessed_applications_response
+      when "/unprocessed_questions", "/необработанные_вопросы"
+        return unprocessed_questions_response
+      when "/moderate", "/модерация"
+        return moderate_menu_response
       end
       
       return AdminMessages.new(@message, @user, @bot).process
@@ -91,14 +103,107 @@ class ProcessMessage
     true
   end
 
-  def sendall_response
-    # Отправляем список заявок
+  def moderate_menu_response
+    text = "📋 *Панель модератора*\n\n" +
+          "Доступные команды:\n" +
+          "• /applications - Все заявки (2 месяца)\n" +
+          "• /questions - Все вопросы (2 месяца)\n" + 
+          "• /unprocessed_applications - Необработанные заявки\n" +
+          "• /unprocessed_questions - Необработанные вопросы\n" +
+          "Или используйте кнопки ниже:"
+    
+    buttons = [
+      ["📨 Заявки", "paginate_applications_1_5"], 
+      ["❓ Вопросы", "paginate_questions_1_5"],
+      ["🔄 Необработанные заявки", "paginate_unprocesseda_1_5"], 
+      ["⏳ Необработанные вопросы", "paginate_unprocessedq_1_5"]
+    ]
+    
+    { 
+      text: text, 
+      chat_id: @user.tg_id, 
+      c_buttons: buttons,
+      disable_reset_button: true 
+    }
+  end
+
+  def applications_response
     Thread.new do
       sleep 0.5
-      AdminMessages.send_all_requests_ls(@bot, @user.tg_id)
+      AdminMessages.send_applications_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
     end
     
-    { text: "🔄 Загружаю список всех заявок за 2 месяца...", chat_id: @user.tg_id, disable_reset_button: true }
+    { 
+      text: "📨 Загружаю заявки (пагинация по 5 на страницу)...", 
+      chat_id: @user.tg_id,
+      disable_reset_button: true 
+    }
+  end
+
+  def questions_response
+    Thread.new do
+      sleep 0.5
+      AdminMessages.send_questions_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
+    end
+    
+    { 
+      text: "❓ Загружаю вопросы (пагинация по 5 на страницу)...", 
+      chat_id: @user.tg_id,
+      disable_reset_button: true 
+    }
+  end
+
+  def unprocessed_applications_response
+    Thread.new do
+      sleep 0.5
+      AdminMessages.send_unprocessed_applications_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
+    end
+    
+    { 
+      text: "🔄 Загружаю необработанные заявки...", 
+      chat_id: @user.tg_id,
+      disable_reset_button: true 
+    }
+  end
+
+  def unprocessed_questions_response
+    Thread.new do
+      sleep 0.5
+      AdminMessages.send_unprocessed_questions_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
+    end
+    
+    { 
+      text: "🔄 Загружаю необработанные вопросы...", 
+      chat_id: @user.tg_id,
+      disable_reset_button: true 
+    }
+  end
+
+  def paginate_response    
+    parts = @message.split('_')
+
+    # Игнорируем клик по информационной кнопке
+    if parts[1] == "info"
+      return nil
+    end
+
+    type = parts[1] # applications, questions, unprocessed questions and applications
+    page = parts[2].to_i
+    per_page = parts[3]&.to_i || 5
+
+    # Защита от page = 0
+    page = [page, 1].max
+    
+    case type
+    when "applications"
+      AdminMessages.send_applications_with_pagination(@bot, @user.tg_id, page: page, per_page: per_page)
+    when "questions"
+      AdminMessages.send_questions_with_pagination(@bot, @user.tg_id, page: page, per_page: per_page)
+    when "unprocessedq"
+      AdminMessages.send_unprocessed_questions_with_pagination(@bot, @user.tg_id, page: page, per_page: per_page)
+    when "unprocesseda"
+      AdminMessages.send_unprocessed_applications_with_pagination(@bot, @user.tg_id, page: page, per_page: per_page)
+    end
   end
 
   def init_response

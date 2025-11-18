@@ -2,6 +2,117 @@ class AdminMessages
   extend Texts
 
   class << self
+    # Все заявки (обработанные и необработанные)
+    def send_applications_with_pagination(bot, chat_id, page: 1, per_page: 5)
+      send_items_with_pagination(
+        bot, 
+        chat_id, 
+        Application.where(ready: true).where("created_at >= ?", Date.today - 2.months).order(created_at: :desc),
+        page: page, 
+        per_page: per_page, 
+        type: "applications"
+      )
+    end
+
+    # Все вопросы (обработанные и необработанные)
+    def send_questions_with_pagination(bot, chat_id, page: 1, per_page: 5)
+      send_items_with_pagination(
+        bot, 
+        chat_id, 
+        Question.where(ready: true).where("created_at >= ?", Date.today - 2.months).order(created_at: :desc),
+        page: page, 
+        per_page: per_page, 
+        type: "questions"
+      )
+    end
+
+    # Только необработанные заявки
+    def send_unprocessed_applications_with_pagination(bot, chat_id, page: 1, per_page: 5)
+      send_items_with_pagination(
+        bot, 
+        chat_id, 
+        Application.where(ready: true, processed: false).where("created_at >= ?", Date.today - 2.months).order(created_at: :desc),
+        page: page, 
+        per_page: per_page, 
+        type: "unprocessed_applications"
+      )
+    end
+
+    # Только необработанные вопросы
+    def send_unprocessed_questions_with_pagination(bot, chat_id, page: 1, per_page: 5)
+      send_items_with_pagination(
+        bot, 
+        chat_id, 
+        Question.where(ready: true, processed: false).where("created_at >= ?", Date.today - 2.months).order(created_at: :desc),
+        page: page, 
+        per_page: per_page, 
+        type: "unprocessed_questions"
+      )
+    end
+
+    # Общий метод для пагинации любого набора элементов
+    def send_items_with_pagination(bot, chat_id, relation, page: 1, per_page: 5, type: "items")
+      $logger.info("DEBUG: Starting #{type} pagination, page: #{page}, per_page: #{per_page}")
+      
+      offset = (page - 1) * per_page
+      total_count = relation.count
+      items = relation.offset(offset).limit(per_page)
+      
+      $logger.info("DEBUG: #{type} - total: #{total_count}, page items: #{items.count}, offset: #{offset}")
+
+      # Отправляем элементы
+      items.each do |item|
+        Sender.new(bot, ls_notification(item, chat_id))
+        sleep(0.1)
+      end
+
+      # Отправляем кнопки пагинации
+      send_pagination_buttons(bot, chat_id, page, per_page, items.count, total_count, type)
+    end
+
+    def send_pagination_buttons(bot, chat_id, current_page, per_page, current_count, total_items, type)
+      total_pages = [(total_items.to_f / per_page).ceil, 1].max
+
+      $logger.info("DEBUG: #{type} pagination - total: #{total_items}, pages: #{total_pages}, current: #{current_page}")
+
+      buttons = []
+      
+      # Кнопка "Назад" если не первая страница
+      if current_page > 1
+        buttons << ["⬅️ Назад", "paginate_#{type}_#{current_page - 1}_#{per_page}"]
+      end
+      
+      # Информация о странице
+      buttons << ["📄 #{current_page}/#{total_pages}", "paginate_info_#{current_page}"]
+      
+      # Кнопка "Вперед" если не последняя страница
+      if current_page < total_pages
+        buttons << ["➡️ Вперед", "paginate_#{type}_#{current_page + 1}_#{per_page}"]
+      end
+
+      # Текст в зависимости от типа
+      type_text = case type
+                  when "applications" then "заявок"
+                  when "questions" then "вопросов"
+                  when "unprocessed_applications" then "необработанных заявок"
+                  when "unprocessed_questions" then "необработанных вопросов"
+                  else "элементов"
+                  end
+
+      text = "📖 Страница #{current_page} из #{total_pages}\n" +
+             "📊 Всего #{type_text}: #{total_items}\n" +
+             "📋 На странице: #{current_count}"
+
+      $logger.info("DEBUG: Sending pagination buttons: #{buttons.inspect}")
+      
+      Sender.new(bot, { 
+        text: text, 
+        chat_id: chat_id, 
+        c_buttons: buttons,
+        disable_reset_button: true 
+      })
+    end
+
     def send_all_requests(bot, chat_id=nil)
       # Throttle to prevent overwhelming the server - max 30 messages per run
       # with 100ms delay between each message
@@ -60,7 +171,8 @@ class AdminMessages
       text = r.text.to_s[..50].to_s.strip
       text = text.empty? ? "(пусто)" : text
       username = r.user&.username || "unknown"
-      text + "...\n" + "@#{username}"
+      status = r.processed ? " ✅" : " ⏳"
+      text + "...\n" + "@#{username}" + status
     end
 
     def button_resolve(r)
@@ -99,6 +211,7 @@ class AdminMessages
     self.class.send_all_requests_ls(@bot, chat_id || @user.tg_id)
     nil
   end
+
   def resolve_response(klass, id, chat_id = nil)
     resolvable = klass.constantize.find(id)
     resolvable.update(processed: true, processed_by: @user.id)

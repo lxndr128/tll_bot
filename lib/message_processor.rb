@@ -46,10 +46,10 @@ class ProcessMessage
 
       if @user.admin
         $logger.info("admin")
-        return { text: "✅ Режим модератора активирован.", chat_id: @user.tg_id, disable_reset_button: true }
+        return { text: "✅ Режим модератора активирован.", chat_id: @user.tg_id, reply_keyboard: true, disable_reset_button: true }
       else 
         $logger.info("not admin")
-        return { text: "✅ Режим обычного пользователя активирован.", chat_id: @user.tg_id, disable_reset_button: true }
+        return { text: "✅ Режим обычного пользователя активирован.", chat_id: @user.tg_id, remove_keyboard: true, disable_reset_button: true }
       end
     end
 
@@ -59,16 +59,22 @@ class ProcessMessage
       end
 
       case @message
-      when "/applications", "/заявки"
+      when "📨 Заявки"
         return applications_response
-      when "/questions", "/вопросы"  
+      when "❓ Вопросы"
         return questions_response
-      when "/unprocessed_applications", "/необработанные_заявки"
+      when "🔄 Необработанные заявки"
         return unprocessed_applications_response
-      when "/unprocessed_questions", "/необработанные_вопросы"
+      when "⏳ Необработанные вопросы"
         return unprocessed_questions_response
-      when "/moderate", "/модерация"
-        return moderate_menu_response
+      when "🔙 Обычный режим"
+        @user.update(admin: false)
+        return { 
+          text: "✅ Режим обычного пользователя активирован.", 
+          chat_id: @user.tg_id,
+          remove_keyboard: true,
+          disable_reset_button: true 
+        }
       end
       
       return AdminMessages.new(@message, @user, @bot).process
@@ -103,41 +109,13 @@ class ProcessMessage
     true
   end
 
-  def moderate_menu_response
-    text = "📋 *Панель модератора*\n\n" +
-          "Доступные команды:\n" +
-          "• /applications - Все заявки (2 месяца)\n" +
-          "• /questions - Все вопросы (2 месяца)\n" + 
-          "• /unprocessed_applications - Необработанные заявки\n" +
-          "• /unprocessed_questions - Необработанные вопросы\n" +
-          "Или используйте кнопки ниже:"
-    
-    buttons = [
-      ["📨 Заявки", "paginate_applications_1_5"], 
-      ["❓ Вопросы", "paginate_questions_1_5"],
-      ["🔄 Необработанные заявки", "paginate_unprocesseda_1_5"], 
-      ["⏳ Необработанные вопросы", "paginate_unprocessedq_1_5"]
-    ]
-    
-    { 
-      text: text, 
-      chat_id: @user.tg_id, 
-      c_buttons: buttons,
-      disable_reset_button: true 
-    }
-  end
-
   def applications_response
     Thread.new do
       sleep 0.5
       AdminMessages.send_applications_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
     end
     
-    { 
-      text: "📨 Загружаю заявки (пагинация по 5 на страницу)...", 
-      chat_id: @user.tg_id,
-      disable_reset_button: true 
-    }
+    with_moderator_menu("📨 Загружаю заявки (пагинация по 5 на страницу)...")
   end
 
   def questions_response
@@ -146,11 +124,7 @@ class ProcessMessage
       AdminMessages.send_questions_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
     end
     
-    { 
-      text: "❓ Загружаю вопросы (пагинация по 5 на страницу)...", 
-      chat_id: @user.tg_id,
-      disable_reset_button: true 
-    }
+    with_moderator_menu("❓ Загружаю вопросы (пагинация по 5 на страницу)...")
   end
 
   def unprocessed_applications_response
@@ -159,11 +133,7 @@ class ProcessMessage
       AdminMessages.send_unprocessed_applications_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
     end
     
-    { 
-      text: "🔄 Загружаю необработанные заявки...", 
-      chat_id: @user.tg_id,
-      disable_reset_button: true 
-    }
+    with_moderator_menu("🔄 Загружаю необработанные заявки...")
   end
 
   def unprocessed_questions_response
@@ -172,11 +142,7 @@ class ProcessMessage
       AdminMessages.send_unprocessed_questions_with_pagination(@bot, @user.tg_id, page: 1, per_page: 5)
     end
     
-    { 
-      text: "🔄 Загружаю необработанные вопросы...", 
-      chat_id: @user.tg_id,
-      disable_reset_button: true 
-    }
+    with_moderator_menu("🔄 Загружаю необработанные вопросы...")
   end
 
   def paginate_response    
@@ -204,6 +170,8 @@ class ProcessMessage
     when "unprocesseda"
       AdminMessages.send_unprocessed_applications_with_pagination(@bot, @user.tg_id, page: page, per_page: per_page)
     end
+
+    return nil
   end
 
   def init_response
@@ -316,5 +284,16 @@ class ProcessMessage
     @user.questions.where(ready: false).destroy_all
     @user.applications.where(ready: false).destroy_all
     @user.back_to_start! if @user.persisted?
+  end
+
+  def with_moderator_menu(text)
+    return { text: text, chat_id: @user.tg_id, disable_reset_button: true } unless @user.admin
+    
+    { 
+      text: text, 
+      chat_id: @user.tg_id,
+      reply_keyboard: true,
+      disable_reset_button: true 
+    }
   end
 end

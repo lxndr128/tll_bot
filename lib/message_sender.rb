@@ -11,6 +11,8 @@ class Sender
     @c_buttons = result[:c_buttons] || []
     @disable_reset_button = result[:disable_reset_button]
     @photos = result[:photos]
+    @reply_keyboard = result[:reply_keyboard]
+    @remove_keyboard = result[:remove_keyboard]
 
     send
     begin
@@ -22,7 +24,17 @@ class Sender
 
   def send
     return if @chat_id.nil?
-  return if @text.nil? || @text.empty?
+    return if @text.nil? || @text.empty?
+
+    # Отправка Reply Keyboard (постоянное меню)
+    if @reply_keyboard
+      return send_reply_keyboard
+    end
+
+    # Удаление клавиатуры
+    if @remove_keyboard
+      return remove_reply_keyboard
+    end
 
     @buttons << button_reset_all unless @disable_reset_button
     begin
@@ -47,8 +59,37 @@ class Sender
       kb = [ @buttons.map { |b| Telegram::Bot::Types::InlineKeyboardButton.new(text: b, callback_data: b) } ]
     end
 
-    buttons = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: kb)#, one_time_keyboard: true)
+    buttons = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: kb)
     @bot.api.send_message(chat_id: @chat_id, text: @text, reply_markup: buttons)
+  end
+
+  def send_reply_keyboard
+    return if @chat_id.nil?
+    return if @text.nil? || @text.empty?
+
+    keyboard = [
+      [Telegram::Bot::Types::KeyboardButton.new(text: "📨 Заявки"), 
+      Telegram::Bot::Types::KeyboardButton.new(text: "❓ Вопросы")],
+      [Telegram::Bot::Types::KeyboardButton.new(text: "🔄 Необработанные заявки"), 
+      Telegram::Bot::Types::KeyboardButton.new(text: "⏳ Необработанные вопросы")],
+      [Telegram::Bot::Types::KeyboardButton.new(text: "🔙 Обычный режим")]
+    ]
+
+    reply_markup = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+      keyboard: keyboard,
+      resize_keyboard: true,
+      one_time_keyboard: false
+    )
+
+    @bot.api.send_message(chat_id: @chat_id, text: @text, reply_markup: reply_markup)
+  rescue => e
+    $logger.error("Error sending reply keyboard to #{@chat_id}: #{e.class} - #{e.message}")
+    $logger.error(e.backtrace.join("\n"))
+  end
+
+  def remove_reply_keyboard
+    reply_markup = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
+    @bot.api.send_message(chat_id: @chat_id, text: @text, reply_markup: reply_markup)
   end
 
   def send_bunch_of_photos

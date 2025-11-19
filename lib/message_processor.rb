@@ -63,9 +63,9 @@ class ProcessMessage
         return applications_response
       when "❓ Вопросы"
         return questions_response
-      when "🔄 Необработанные заявки"
+      when "Необработанные заявки"
         return unprocessed_applications_response
-      when "⏳ Необработанные вопросы"
+      when "Необработанные вопросы"
         return unprocessed_questions_response
       when "🔙 Обычный режим"
         @user.update(admin: false)

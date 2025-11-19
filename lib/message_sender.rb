@@ -70,8 +70,8 @@ class Sender
     keyboard = [
       [Telegram::Bot::Types::KeyboardButton.new(text: "📨 Заявки"), 
       Telegram::Bot::Types::KeyboardButton.new(text: "❓ Вопросы")],
-      [Telegram::Bot::Types::KeyboardButton.new(text: "🔄 Необработанные заявки"), 
-      Telegram::Bot::Types::KeyboardButton.new(text: "⏳ Необработанные вопросы")],
+      [Telegram::Bot::Types::KeyboardButton.new(text: "Необработанные заявки"), 
+      Telegram::Bot::Types::KeyboardButton.new(text: "Необработанные вопросы")],
       [Telegram::Bot::Types::KeyboardButton.new(text: "🔙 Обычный режим")]
     ]
 

@@ -1,7 +1,6 @@
 class ProcessMessage
   include Texts
 
-  # Написать нормально, если будут силы
   def initialize(message, bot=nil)
     @bot = bot
     @m = message
@@ -18,11 +17,12 @@ class ProcessMessage
     else
       @message = message.text || 'null'
       @photos = message.photo
+      @caption = message.caption
+      @media_group_id = message.media_group_id
       tg_id = message.chat.id
       username = message.chat.username || "Noname"
     end
 
-    # Use find first, then create if not exists to avoid race conditions
     @user = User.find_by(tg_id: tg_id)
     unless @user
       begin
@@ -96,14 +96,21 @@ class ProcessMessage
   def border
     return if @m.try(:from).class.name != "Telegram::Bot::Types::User"
     
-    # Skip duplicate messages (unless they contain photos)
+    if @media_group_id
+      message_key = "#{@user.tg_id}_#{@media_group_id}"
+      if $processed_media_groups && $processed_media_groups[message_key]
+        return false
+      end
+      $processed_media_groups ||= {}
+      $processed_media_groups[message_key] = true
+    end
+    
     if @message == ($previous_message[@user.tg_id] || nil) && @photos.blank?
       return false
     end
 
     $previous_message[@user.tg_id] = @message
 
-    # Allow photos in any state
     return true if !@photos.blank?
 
     true
@@ -148,16 +155,14 @@ class ProcessMessage
   def paginate_response    
     parts = @message.split('_')
 
-    # Игнорируем клик по информационной кнопке
     if parts[1] == "info"
       return nil
     end
 
-    type = parts[1] # applications, questions, unprocessed questions and applications
+    type = parts[1]
     page = parts[2].to_i
     per_page = parts[3]&.to_i || 5
 
-    # Защита от page = 0
     page = [page, 1].max
     
     case type
@@ -190,11 +195,24 @@ class ProcessMessage
   end
 
   def announce_response
-    # User sends the announcement text
+    text_to_save = @caption.presence || @message
+    
+    if text_to_save.blank? || text_to_save == 'null'
+      return { 
+        text: "📝 Пожалуйста, отправьте текст анонса.", 
+        chat_id: @user.tg_id,
+        disable_reset_button: true
+      }
+    end
+    
     @user.behalf!
     message_id = @m.try(:message_id) || Time.now.to_i
     application = Application.find_or_create_by(ready: false, user_id: @user.id, message_id: message_id)
-    application.update(text: @message)
+    application.update(text: text_to_save)
+
+    if @photos.present?
+      save_best_photo(application)
+    end
 
     { text: on_whose_behalf_text, chat_id: @user.tg_id, buttons: [button_tll_event, button_other_event], disable_reset_button: true }
   end
@@ -230,7 +248,6 @@ class ProcessMessage
 
   def commercial_or_not_response
     @user.ask_for_resources!
-    # Use the last unfinished application (preserves text from announce_description_response)
     application = @user.applications.where(ready: false).last
     application.update(commercial: @message) if application
 
@@ -246,15 +263,12 @@ class ProcessMessage
   end
 
   def photos_response
-    # Process incoming photos
     if @photos
       process_photos
       
-      # Send confirmation but stay in photos state to allow more photos
       return { text: photos_received_text, chat_id: @user.tg_id, buttons: [button_have_no_photos], disable_reset_button: true }
     end
     
-    # If user sends text message in photos state (without photos) - button press to finish
     if @message == button_have_no_photos
       app = @user.applications.where(ready: false).last
       app.update(ready: true) if app
@@ -263,7 +277,6 @@ class ProcessMessage
       return { text: announce_have_sent_text, chat_id: @user.tg_id, disable_reset_button: true }
     end
     
-    # Any other text message - stay in photos state
     nil
   end
 
@@ -277,7 +290,17 @@ class ProcessMessage
     application = @user.applications.where(ready: false).last
     return unless application
     
-    application.photos.create(file_id: @photos.last.file_id) if @photos.last.file_id
+    save_best_photo(application)
+  end
+
+  def save_best_photo(application)
+    return unless @photos.present?
+    
+    best_photo = @photos.max_by { |p| p.file_size || 0 }
+    
+    if best_photo.file_id
+      application.photos.create(file_id: best_photo.file_id)
+    end
   end
 
   def reset_all
